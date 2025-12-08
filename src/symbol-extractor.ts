@@ -10,12 +10,9 @@ export interface SymbolInfo {
 
 export interface PythonBlockWithLineInfo {
     code: string;
-    startLine: number; // 该块在 .rpy 文件中的起始行号（用于定位）
+    startLine: number; // 内容第一行（python: 的下一行）
 }
 
-/**
- * 提取所有 python 块，并记录它们在原文件中的起始行
- */
 export function extractPythonBlocksWithLineInfo(documentText: string): PythonBlockWithLineInfo[] {
     const blocks: PythonBlockWithLineInfo[] = [];
     const lines = documentText.split('\n');
@@ -37,10 +34,9 @@ export function extractPythonBlocksWithLineInfo(documentText: string): PythonBlo
                 });
                 currentBlock = [];
             }
-            // 开始新块
             inPython = true;
             baseIndent = line.length - trimmed.length;
-            startLine = i + 1; // python 块内容从下一行开始
+            startLine = i + 1; // 内容从下一行开始
             continue;
         }
 
@@ -52,7 +48,6 @@ export function extractPythonBlocksWithLineInfo(documentText: string): PythonBlo
 
             const currentIndent = line.length - trimmed.length;
             if (currentIndent <= baseIndent) {
-                // 退出块
                 if (currentBlock.length > 0) {
                     blocks.push({
                         code: currentBlock.join('\n'),
@@ -69,7 +64,6 @@ export function extractPythonBlocksWithLineInfo(documentText: string): PythonBlo
         }
     }
 
-    // 处理最后一个块
     if (inPython && currentBlock.length > 0) {
         blocks.push({
             code: currentBlock.join('\n'),
@@ -78,72 +72,6 @@ export function extractPythonBlocksWithLineInfo(documentText: string): PythonBlo
     }
 
     return blocks;
-}
-
-/**
- * 从 Python 代码块中提取符号（函数/类/变量）及其 docstring
- */
-export function parsePythonBlockForSymbols(pythonCode: string, startLineInRpy: number): SymbolInfo[] {
-    const symbols: SymbolInfo[] = [];
-    const lines = pythonCode.split('\n');
-
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const trimmed = line.trim();
-        const originalLineNum = startLineInRpy + i;
-
-        if (trimmed === '' || trimmed.startsWith('#')) continue;
-
-        // === 函数 ===
-        const funcMatch = trimmed.match(/^def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/);
-        if (funcMatch) {
-            const name = funcMatch[1];
-            const doc = extractDocstringFromLines(lines, i + 1);
-            symbols.push({
-                name,
-                kind: 'function',
-                docstring: doc,
-                range: new vscode.Range(originalLineNum, 0, originalLineNum, line.length)
-            });
-            continue;
-        }
-
-        // === 类 ===
-        const classMatch = trimmed.match(/^class\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*[\(:]/);
-        if (classMatch) {
-            const name = classMatch[1];
-            const doc = extractDocstringFromLines(lines, i + 1);
-            symbols.push({
-                name,
-                kind: 'class',
-                docstring: doc,
-                range: new vscode.Range(originalLineNum, 0, originalLineNum, line.length)
-            });
-            continue;
-        }
-
-        // === 模块级变量（仅顶层）===
-        const varMatch = trimmed.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*=/);
-        if (varMatch && line.startsWith(trimmed)) { // 无缩进
-            const name = varMatch[1];
-            // 检查上一行是否为独立字符串（变量 docstring）
-            if (i > 0) {
-                const prevTrimmed = lines[i - 1].trim();
-                if ((prevTrimmed.startsWith('"""') && prevTrimmed.endsWith('"""')) ||
-                    (prevTrimmed.startsWith("'''") && prevTrimmed.endsWith("'''"))) {
-                    const doc = prevTrimmed.substring(3, prevTrimmed.length - 3).trim();
-                    symbols.push({
-                        name,
-                        kind: 'variable',
-                        docstring: doc,
-                        range: new vscode.Range(originalLineNum, 0, originalLineNum, line.length)
-                    });
-                }
-            }
-        }
-    }
-
-    return symbols;
 }
 
 function extractDocstringFromLines(lines: string[], startIndex: number): string | undefined {
@@ -174,31 +102,85 @@ function extractDocstringFromLines(lines: string[], startIndex: number): string 
                 return docLines.join('\n').trim();
             }
         }
-        break; // 非 docstring
+        break;
     }
     return undefined;
 }
 
-/**
- * 提取 docstring
- */
-export function extractDocstring(pythonCode: string, name: string): string | undefined {
+export function parsePythonBlockForSymbols(pythonCode: string, startLineInRpy: number): SymbolInfo[] {
+    const symbols: SymbolInfo[] = [];
     const lines = pythonCode.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (line.startsWith(`def ${name}(`) || line.startsWith(`class ${name}`)) {
-            return extractDocstringFromLines(lines, i + 1);
+
+    // 计算最小非空行缩进（作为“模块级”基准）
+    let minIndent = Infinity;
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed !== '' && !trimmed.startsWith('#')) {
+            const indent = line.length - trimmed.length;
+            if (indent < minIndent) minIndent = indent;
         }
-        // 变量：检查下一行是否是 =，且上一行是字符串
-        if (line === name && i + 1 < lines.length && lines[i + 1].trim().startsWith(name + ' =')) {
-            if (i > 0) {
-                const prev = lines[i - 1].trim();
-                if ((prev.startsWith('"""') && prev.endsWith('"""')) ||
-                    (prev.startsWith("'''") && prev.endsWith("'''"))) {
-                    return prev.substring(3, prev.length - 3).trim();
+    }
+    if (minIndent === Infinity) minIndent = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        const originalLineNum = startLineInRpy + i;
+
+        if (trimmed === '' || trimmed.startsWith('#')) continue;
+
+        const currentIndent = line.length - trimmed.length;
+
+        // === 函数/类：顶格或最小缩进
+        if (currentIndent === minIndent) {
+            const funcMatch = trimmed.match(/^def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/);
+            if (funcMatch) {
+                const name = funcMatch[1];
+                const doc = extractDocstringFromLines(lines, i + 1);
+                symbols.push({
+                    name,
+                    kind: 'function',
+                    docstring: doc,
+                    range: new vscode.Range(originalLineNum, 0, originalLineNum, line.length)
+                });
+                continue;
+            }
+
+            const classMatch = trimmed.match(/^class\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*[\(:]/);
+            if (classMatch) {
+                const name = classMatch[1];
+                const doc = extractDocstringFromLines(lines, i + 1);
+                symbols.push({
+                    name,
+                    kind: 'class',
+                    docstring: doc,
+                    range: new vscode.Range(originalLineNum, 0, originalLineNum, line.length)
+                });
+                continue;
+            }
+
+            const varMatch = trimmed.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*=/);
+            if (varMatch) {
+                const name = varMatch[1];
+                let doc: string | undefined = undefined;
+                if (i > 0) {
+                    const prevTrimmed = lines[i - 1].trim();
+                    if (
+                        (prevTrimmed.startsWith('"""') && prevTrimmed.endsWith('"""')) ||
+                        (prevTrimmed.startsWith("'''") && prevTrimmed.endsWith("'''"))
+                    ) {
+                        doc = prevTrimmed.substring(3, prevTrimmed.length - 3).trim();
+                    }
                 }
+                symbols.push({
+                    name,
+                    kind: 'variable',
+                    docstring: doc,
+                    range: new vscode.Range(originalLineNum, 0, originalLineNum, line.length)
+                });
             }
         }
     }
-    return undefined;
+
+    return symbols;
 }
