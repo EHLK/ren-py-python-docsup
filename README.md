@@ -1,71 +1,33 @@
-# ren-py-python-docsup README
+# Ren'Py 文档索引（Ren'Py docsup）
 
-This is the README for your extension "ren-py-python-docsup". After writing up a brief description, we recommend including the following sections.
+> 为 Ren'Py 项目的 `python:` 和 `init python:` 块提供文档字符串索引，支持函数/变量的 **Hover 文档预览** 和 **跳转到定义**。
+> ps:仅支持三重引号
 
-## Features
+## ✨ 功能
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+![1765227577482](images/README/1765227577482.png)
 
-For example if there is an image subfolder under your extension project workspace:
+- **Hover**
+  悬停在 Python 代码上，自动显示：
+  - 函数签名（含返回类型推断）
+  - 变量类型（如 `hp: int`）ps:可能存在部分问题
+  - Docstring 文档
+- **自动类型推断**
+  未写 `-> type` 注解，会尝试从 `return` 语句简单的推断返回类型。
+- **重建索引**
+  命令面板执行 **“renpy重建索引”**
+- **跳转到定义**
+  ps:可能存在部分问题
 
-\!\[feature X\]\(images/feature-x.png\)
+## TODO
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+* [ ] 作用域判断
+* [ ] 对`$`的支持
+* [ ] 对类的支持
+* [ ] 对文档字符串的部分格式做出美化
 
-## Requirements
+## 🛠️ 使用方法
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+1. 安装此插件
+2. 打开.rpy文件并将鼠标放至函数、变量上即可
 
-## Extension Settings
-
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**

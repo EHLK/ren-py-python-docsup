@@ -1,11 +1,16 @@
 {
   "name": "renpy-python-docsup",
+  "license": "MIT",
   "displayName": "%extension.name%",
   "description": "Show docstring hover for Python code in .rpy files",
   "version": "0.0.1",
   "publisher": "LKDG",
   "engines": {
     "vscode": "^1.106.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EHLK/ren-py-python-docsup.git"
   },
   "categories": [
     "Snippets"
