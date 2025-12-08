@@ -12,10 +12,17 @@
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
-    "commands": [
+    "languages":[
       {
-        "command": "ren-py-python-docsup.helloWorld",
-        "title": "Hello World"
+        "id": "renpy",
+        "aliases": [
+          "Ren'py",
+          "renpy"
+        ],
+        "extensions": [
+          ".rpy"
+        ],
+        "configuration": "./language-configuration.json"
       }
     ]
   },
