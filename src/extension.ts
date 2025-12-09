@@ -112,100 +112,35 @@ export async function activate(context: vscode.ExtensionContext) {
         const markdown = new vscode.MarkdownString();
 
         if (symbol.kind === 'function') {
-            const startLineNum = symbol.range.start.line;
-            const originalSignature = defDocument.lineAt(startLineNum).text;
-            let signatureLine = originalSignature.trim();
-
-            // 如果已有 ->，直接显示
-            if (signatureLine.includes('->')) {
-                markdown.appendCodeblock(signatureLine, 'python');
+            const line = defDocument.lineAt(symbol.range.start.line).text.trim();
+            // 如果已经有 ->，直接显示
+            if (line.includes('->')) {
+                markdown.appendCodeblock(line, 'python');
             } else {
-                // 否则，尝试推断返回类型
-                let inferredReturnType = 'unknown';
+                const inferred = symbol.inferredType ?? 'unknown';
 
-                // 获取函数定义的缩进（用于判断函数体）
-                const funcIndent = originalSignature.length - originalSignature.trimStart().length;
+                // 找 “):” 或 “) :”
+                const sigMatch = line.match(/\)\s*:/);
 
-                // 向下扫描找第一个 return
-                for (let i = 1; startLineNum + i < defDocument.lineCount; i++) {
-                    const currentLineNum = startLineNum + i;
-                    const line = defDocument.lineAt(currentLineNum).text;
-                    const trimmed = line.trim();
+                if (sigMatch && sigMatch.index !== undefined) {
+                    const insertPos = sigMatch.index + sigMatch[0].length - 1; // 冒号位置
+                    const newSig =
+                        line.slice(0, insertPos)
+                        + ` -> ${inferred}`
+                        + line.slice(insertPos);
 
-                    if (trimmed === '' || trimmed.startsWith('#')) continue;
-
-                    // 检查是否还在函数体内
-                    const currentIndent = line.length - line.trimStart().length;
-                    if (currentIndent <= funcIndent) break;
-
-                    if (trimmed.startsWith('return ')) {
-                        const returnValue = trimmed.substring('return '.length).trim();
-                        // 简单类型推断
-                        if (/^(".*?"|'.*?')$/.test(returnValue)) {
-                            inferredReturnType = 'str';
-                        } else if (/^\d+$/.test(returnValue)) {
-                            inferredReturnType = 'int';
-                        } else if (/^\d*\.\d+$/.test(returnValue)) {
-                            inferredReturnType = 'float';
-                        } else if (returnValue === 'True' || returnValue === 'False') {
-                            inferredReturnType = 'bool';
-                        } else if (returnValue === '[]') {
-                            inferredReturnType = 'list';
-                        } else if (returnValue === '{}') {
-                            inferredReturnType = 'dict';
-                        } else if (returnValue === 'None') {
-                            inferredReturnType = 'None';
-                        } else if (returnValue.startsWith('[') && returnValue.endsWith(']')) {
-                            inferredReturnType = 'list';
-                        } else if (returnValue.startsWith('{') && returnValue.endsWith('}')) {
-                            inferredReturnType = 'dict';
-                        }
-                        break; // 只取第一个 return
-                    }
+                    markdown.appendCodeblock(newSig, 'python');
+                } else {
+                    // 极端异常兜底
+                    markdown.appendCodeblock(line, 'python');
                 }
-
-                // 拼接新签名：def name(...) -> inferred_type:
-                const insertPos = signatureLine.indexOf(':');
-                if (insertPos !== -1) {
-                    signatureLine = signatureLine.slice(0, insertPos) + ` -> ${inferredReturnType}` + signatureLine.slice(insertPos);
-                }
-
-                markdown.appendCodeblock(signatureLine, 'python');
             }
         } else if (symbol.kind === 'class') {
             // 类：直接显示
             const signatureLine = defDocument.lineAt(symbol.range.start.line).text.trim();
             markdown.appendCodeblock(signatureLine, 'python');
         } else if (symbol.kind === 'variable') {
-            // 推断类型并显示 name: type
-            const line = defDocument.lineAt(symbol.range.start.line).text;
-            const valueMatch = line.match(/=\s*(.+)/);
-            let inferredType = 'unknown';
-
-            if (valueMatch) {
-                const value = valueMatch[1].trim();
-                if (/^(".*?"|'.*?')$/.test(value)) {
-                    inferredType = 'str';
-                } else if (/^\d+$/.test(value)) {
-                    inferredType = 'int';
-                } else if (/^\d*\.\d+$/.test(value)) {
-                    inferredType = 'float';
-                } else if (value === 'True' || value === 'False') {
-                    inferredType = 'bool';
-                } else if (value === '[]') {
-                    inferredType = 'list';
-                } else if (value === '{}') {
-                    inferredType = 'dict';
-                } else if (value === 'None') {
-                    inferredType = 'None';
-                } else if (value.startsWith('[') && value.endsWith(']')) {
-                    inferredType = 'list';
-                } else if (value.startsWith('{') && value.endsWith('}')) {
-                    inferredType = 'dict';
-                }
-            }
-
-            markdown.appendCodeblock(`${name}: ${inferredType}`, 'python');
+            markdown.appendCodeblock(`${name}: ${symbol.inferredType ?? 'unknown'}`, 'python');
         }
 
         // docstring 是可选的
