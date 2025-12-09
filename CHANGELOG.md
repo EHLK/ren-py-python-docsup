@@ -6,4 +6,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
-- Initial release
+* ### 0.0.2 :
+  
+  ##### Fixed：
+
+> * 修复参数列表字符插入错误位置的问题。
+> * Fixed the issue of incorrect character insertion position in the parameter list.
+
+- 0.0.1 : Initial release
+
