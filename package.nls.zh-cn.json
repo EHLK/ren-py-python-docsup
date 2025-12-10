@@ -1,4 +1,5 @@
 {
     "extension.name": "Ren'Py 文档索引",
-    "command.rebuild.title":"renpy重建索引"
+    "command.rebuild.title":"renpy重建索引",
+    "showme.infile":"# 文件由 Ren'Py docsup 生成"
 }
