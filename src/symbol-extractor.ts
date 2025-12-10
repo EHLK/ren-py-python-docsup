@@ -20,7 +20,8 @@ export interface PythonBlockWithLineInfo {
 
 export function extractPythonBlocksWithLineInfo(documentText: string): PythonBlockWithLineInfo[] {
     const blocks: PythonBlockWithLineInfo[] = [];
-    const lines = documentText.split('\n');
+    const normalizedText = documentText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const lines = normalizedText.split('\n');
     let inPython = false;
     let currentBlock: string[] = [];
     let baseIndent = -1;
@@ -30,18 +31,15 @@ export function extractPythonBlocksWithLineInfo(documentText: string): PythonBlo
         const line = lines[i];
         const trimmed = line.trim();
 
+        // === 处理 python: / init python: 块（原有逻辑）===
         if (/^(init\s+)?python\s*:/.test(trimmed)) {
-            // 结束上一个块
             if (inPython && currentBlock.length > 0) {
-                blocks.push({
-                    code: currentBlock.join('\n'),
-                    startLine: startLine
-                });
+                blocks.push({ code: currentBlock.join('\n'), startLine });
                 currentBlock = [];
             }
             inPython = true;
             baseIndent = line.length - trimmed.length;
-            startLine = i + 1; // 内容从下一行开始
+            startLine = i + 1;
             continue;
         }
 
@@ -54,10 +52,7 @@ export function extractPythonBlocksWithLineInfo(documentText: string): PythonBlo
             const currentIndent = line.length - trimmed.length;
             if (currentIndent <= baseIndent) {
                 if (currentBlock.length > 0) {
-                    blocks.push({
-                        code: currentBlock.join('\n'),
-                        startLine: startLine
-                    });
+                    blocks.push({ code: currentBlock.join('\n'), startLine });
                 }
                 currentBlock = [];
                 inPython = false;
@@ -67,13 +62,21 @@ export function extractPythonBlocksWithLineInfo(documentText: string): PythonBlo
                 currentBlock.push(line);
             }
         }
+
+        // === 处理 $ x = ... 行 ===
+        if (!inPython && trimmed.startsWith('$ ')) {
+            // 检查是否是有效的赋值（包含 =）
+            if (trimmed.includes('=')) {
+                blocks.push({
+                    code: trimmed.substring(2), // 去掉 "$ "
+                    startLine: i // $ 行本身是 Python 代码所在行
+                });
+            }
+        }
     }
 
     if (inPython && currentBlock.length > 0) {
-        blocks.push({
-            code: currentBlock.join('\n'),
-            startLine: startLine
-        });
+        blocks.push({ code: currentBlock.join('\n'), startLine });
     }
 
     return blocks;
@@ -141,6 +144,51 @@ function inferFunctionReturnType(
 export function parsePythonBlockForSymbols(pythonCode: string, startLineInRpy: number): SymbolInfo[] {
     const symbols: SymbolInfo[] = [];
     const lines = pythonCode.split('\n');
+    //console.log('Raw lines:', lines.map(l => JSON.stringify(l)));
+
+    // $ 行是单行，所以 startLineInRpy 就是变量所在行
+    // 而 python 块可能是多行
+
+    // 是否是单行块（来自 $）
+    const isDollarLine = lines.length === 1 && !pythonCode.trim().startsWith('def ') && !pythonCode.trim().startsWith('class ');
+
+    if (isDollarLine) {
+        const line = lines[0];
+        const trimmed = line.trim();
+        const originalLineNum = startLineInRpy; // $ 行就是这一行
+
+        // 查找 #: 注释（在同一行）
+        let exprPart = trimmed;
+        let commentType: string | undefined = undefined;
+
+        const hashColonMatch = trimmed.match(/(\s*#:\s*(.+?))(\s*$)/);
+        if (hashColonMatch) {
+            commentType = hashColonMatch[2].trim();
+            exprPart = trimmed.slice(0, hashColonMatch.index).trim();
+        }
+
+        const varMatch = exprPart.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(.+)/);
+        if (varMatch) {
+            const name = varMatch[1];
+            const expr = varMatch[2];
+
+            let inferred = inferTypeFromExpression(expr) ?? 'unknown';
+            if (commentType) {
+                inferred = commentType; // 优先使用 #: 注释类型
+            }
+
+            symbols.push({
+                name,
+                kind: 'variable',
+                inferredType: inferred,
+                range: new vscode.Range(originalLineNum, 0, originalLineNum, line.length)
+            });
+        }
+
+        return symbols;
+    }
+
+    // === 原有 python 块逻辑（多行）===
     type Context =
         | { kind: 'module' }
         | { kind: 'class'; name: string; indent: number }
@@ -149,7 +197,6 @@ export function parsePythonBlockForSymbols(pythonCode: string, startLineInRpy: n
     function currentScope(): Context {
         return contextStack[contextStack.length - 1];
     }
-    // 计算最小非空行缩进（作为“模块级”基准）
     let minIndent = Infinity;
     for (const line of lines) {
         const trimmed = line.trim();
@@ -168,7 +215,7 @@ export function parsePythonBlockForSymbols(pythonCode: string, startLineInRpy: n
         if (trimmed === '' || trimmed.startsWith('#')) continue;
 
         const currentIndent = line.length - trimmed.length;
-        
+
         // === 函数/类：顶格或最小缩进
         if (currentIndent === minIndent) {
             const inferred = inferFunctionReturnType(lines, i, currentIndent);
@@ -254,18 +301,42 @@ export function parsePythonBlockForSymbols(pythonCode: string, startLineInRpy: n
             }
             if (varMatch) {
                 const name = varMatch[1];
-                const expr = varMatch[2];
+                // 🔥 关键：先清理 expr，去掉 #: 注释
+                let expr = varMatch[2];
+                
+                // 从 expr 末尾移除 #: ...
+                const exprCleanMatch = expr.match(/^(.*?)(\s*#:.*)?$/);
+                if (exprCleanMatch) {
+                    
+                    expr = exprCleanMatch[1].trim();
+                }
+
+                // 然后再提取 commentType（行内）
+                let commentType: string | undefined = undefined;
+                const inlineCommentMatch = trimmed.match(/#:\s*([^\r\n]+?)(?:\s*)$/);
+                if (inlineCommentMatch) {
+                    commentType = inlineCommentMatch[1].trim();
+                }
+
+                // 检查下一行
+                if (!commentType && i + 1 < lines.length) {
+                    const nextLine = lines[i + 1].trim();
+                    const nextMatch = nextLine.match(/^#:\s*(.+)$/);
+                    if (nextMatch) commentType = nextMatch[1].trim();
+                }
+
+                let inferred = inferTypeFromExpression(expr) ?? 'unknown';
+                if (commentType) inferred = commentType;
 
                 symbols.push({
                     name,
                     kind: 'variable',
-                    inferredType: inferTypeFromExpression(expr) ?? 'unknown',
+                    inferredType: inferred,
                     range: new vscode.Range(originalLineNum, 0, originalLineNum, line.length)
                 });
             }
         }
     }
-    
 
     return symbols;
 }
