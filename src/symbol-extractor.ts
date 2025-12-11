@@ -81,12 +81,12 @@ export function extractPythonBlocks(text: string): PythonBlock[] {
                 lineMap.push({
                     rpyLine: i,
                     pyLine: buf.length - 1,
-                    rpyColBase: 0,
+                    rpyColBase: indent,
                 });
                 continue;
             }
 
-            const colBase = baseIndent + 4;
+            const colBase = line.indexOf(trimmed) + 4;
             const pyLine = buf.length;
 
             buf.push(line.slice(colBase));

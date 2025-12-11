@@ -20,7 +20,7 @@ function scheduleRebuild(uri: vscode.Uri) {
     rebuildQueue.set(key, setTimeout(() => {
         rebuildFile(uri);
         rebuildQueue.delete(key);
-    }, 250));
+    }, 80));
 }
 async function initCacheDir(): Promise<vscode.Uri | null> {
     if (cacheDir) return cacheDir;
@@ -114,6 +114,7 @@ async function rebuildFile(rpyUri: vscode.Uri) {
     const pyUri = rpyToPyUri(rpyUri, cacheDir);
 
     await vscode.workspace.fs.createDirectory(pyUri.with({ path: pyUri.path.replace(/\/[^/]+$/, '') }));
+    if (rebuildVersion.get(key) !== v) return;
     await vscode.workspace.fs.writeFile(pyUri, Buffer.from(pyText, 'utf8'));
 
     fileIndex.set(rpyUri.toString(), indexed);
@@ -146,6 +147,14 @@ async function ensurePyDocument(pyUri: vscode.Uri): Promise<vscode.TextDocument>
 }
 
 export async function activate(ctx: vscode.ExtensionContext) {
+//    vscode.workspace.getConfiguration('files').update(
+//        'exclude',
+//        {
+//            ['**/.renpy-pyright']: true,
+//            ...vscode.workspace.getConfiguration('files').get('exclude')
+//        },
+//        vscode.ConfigurationTarget.Workspace
+//    );
     const dir = await initCacheDir();
     if (!dir) return;
 
@@ -167,7 +176,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
             }
 
             const pyUri = rpyToPyUri(doc.uri, cacheDir);
-            await ensurePyDocument(pyUri);
+            // await ensurePyDocument(pyUri);
             const pyPos = mapRpyToPy(pos, block);
 
             const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
@@ -202,7 +211,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
             }
 
             const pyUri = rpyToPyUri(doc.uri, cacheDir);
-            await ensurePyDocument(pyUri);
+            // await ensurePyDocument(pyUri);
             const pyPos = mapRpyToPy(pos, block);
 
             const defs = await vscode.commands.executeCommand<vscode.Location[]>(
