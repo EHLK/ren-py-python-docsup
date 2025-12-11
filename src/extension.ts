@@ -23,10 +23,10 @@ function scheduleRebuild(uri: vscode.Uri) {
     }, 250));
 }
 async function initCacheDir(): Promise<vscode.Uri | null> {
-    if (cacheDir) return cacheDir;
+    if (cacheDir) {return cacheDir;}
 
     const root = vscode.workspace.workspaceFolders?.[0];
-    if (!root) return null;
+    if (!root) {return null;}
 
     cacheDir = vscode.Uri.joinPath(root.uri, CACHE_DIR);
     await vscode.workspace.fs.createDirectory(cacheDir);
@@ -34,7 +34,7 @@ async function initCacheDir(): Promise<vscode.Uri | null> {
 }
 async function ensureCacheDir(): Promise<vscode.Uri | null> {
     const root = vscode.workspace.workspaceFolders?.[0];
-    if (!root) return null;
+    if (!root) {return null;}
     const dir = vscode.Uri.joinPath(root.uri, CACHE_DIR);
     await vscode.workspace.fs.createDirectory(dir);
     return dir;
@@ -74,7 +74,7 @@ function buildMirror(
 }
 function mapRpyToPy(pos: vscode.Position, block: IndexedBlock): vscode.Position {
     const entry = block.lineMap.find(e => e.rpyLine === pos.line);
-    if (!entry) return new vscode.Position(block.pyLineStart, 0);
+    if (!entry) {return new vscode.Position(block.pyLineStart, 0);}
     return new vscode.Position(
         block.pyLineStart + entry.pyLine,
         Math.max(0, pos.character - entry.rpyColBase)
@@ -84,7 +84,7 @@ function mapRpyToPy(pos: vscode.Position, block: IndexedBlock): vscode.Position 
 function mapPyToRpy(pos: vscode.Position, block: IndexedBlock): vscode.Position | null {
     const rel = pos.line - block.pyLineStart;
     const entry = block.lineMap.find(e => e.pyLine === rel);
-    if (!entry) return null;
+    if (!entry) {return null;}
     return new vscode.Position(
         entry.rpyLine,
         entry.rpyColBase + pos.character
@@ -100,12 +100,12 @@ async function rebuildFile(rpyUri: vscode.Uri) {
         await vscode.workspace.fs.readFile(rpyUri)
     ).toString('utf8');
 
-    if (rebuildVersion.get(key) !== v) return; // 放弃旧任务
+    if (rebuildVersion.get(key) !== v) {return;} // 放弃旧任务
 
     const blocks = extractPythonBlocks(text);
     const { text: pyText, indexed } = buildMirror(blocks, rpyUri);
 
-    if (rebuildVersion.get(key) !== v) return;
+    if (rebuildVersion.get(key) !== v) {return;}
     
     if (!cacheDir) {
         console.error("Cache directory is not initialized.");
@@ -132,7 +132,7 @@ function mapPyToAnyRpy(
 ): vscode.Position | null {
     for (const b of blocks) {
         const r = mapPyToRpy(pos, b);
-        if (r) return r;
+        if (r) {return r;}
     }
     return null;
 }
@@ -147,20 +147,20 @@ async function ensurePyDocument(pyUri: vscode.Uri): Promise<vscode.TextDocument>
 
 export async function activate(ctx: vscode.ExtensionContext) {
     const dir = await initCacheDir();
-    if (!dir) return;
+    if (!dir) {return;}
 
     // 初始索引
     const files = await vscode.workspace.findFiles('**/*.rpy');
-    for (const f of files) await rebuildFile(f);
+    for (const f of files) {await rebuildFile(f);}
 
     // hover
     ctx.subscriptions.push(vscode.languages.registerHoverProvider('renpy', {
         async provideHover(doc, pos) {
             const blocks = fileIndex.get(doc.uri.toString());
-            if (!blocks) return null;
+            if (!blocks) {return null;}
 
             const block = findBlockAt(blocks, pos.line);
-            if (!block) return null;
+            if (!block) {return null;}
 
             if (!cacheDir) {
                 return null;
@@ -175,14 +175,14 @@ export async function activate(ctx: vscode.ExtensionContext) {
                 pyUri,
                 pyPos
             );
-            if (!hovers?.length) return null;
+            if (!hovers?.length) {return null;}
 
             const h = hovers[0];
-            if (!h.range) return h;
+            if (!h.range) {return h;}
 
             const start = mapPyToRpy(h.range.start, block);
             const end = mapPyToRpy(h.range.end, block);
-            if (!start || !end) return null;
+            if (!start || !end) {return null;}
 
             return new vscode.Hover(h.contents, new vscode.Range(start, end));
         }
@@ -192,10 +192,10 @@ export async function activate(ctx: vscode.ExtensionContext) {
     ctx.subscriptions.push(vscode.languages.registerDefinitionProvider('renpy', {
         async provideDefinition(doc, pos) {
             const blocks = fileIndex.get(doc.uri.toString());
-            if (!blocks) return null;
+            if (!blocks) {return null;}
 
             const block = findBlockAt(blocks, pos.line);
-            if (!block) return null;
+            if (!block) {return null;}
 
             if (!cacheDir) {
                 return null;
@@ -210,11 +210,11 @@ export async function activate(ctx: vscode.ExtensionContext) {
                 pyUri,
                 pyPos
             );
-            if (!defs?.length) return null;
+            if (!defs?.length) {return null;}
 
             const def = defs[0];
             const rpyPos = mapPyToAnyRpy(def.range.start, blocks);
-            if (!rpyPos) return null;
+            if (!rpyPos) {return null;}
 
             return new vscode.Location(doc.uri, rpyPos);
         }
