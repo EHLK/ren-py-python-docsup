@@ -3,7 +3,7 @@
   "license": "MIT",
   "displayName": "%extension.name%",
   "description": "Show docstring hover for Python code in .rpy files",
-  "version": "0.0.4.1",
+  "version": "0.0.41",
   "publisher": "LKDG",
   "engines": {
     "vscode": "^1.106.1"
